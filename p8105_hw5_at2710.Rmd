@@ -12,9 +12,9 @@ code_folding: hide
 library(tidyverse
 library(janitor)
 library(knitr)
-library(ggridges)
-library(patchwork)
-library(lubridate)
+# library(ggridges)
+# library(patchwork)
+# library(lubridate)
 
 knitr::opts_chunk$set(echo = TRUE,
   fig.width = 6,
@@ -36,10 +36,22 @@ read_add_id_arm <- function(x){
     mutate(id = str_sub(x, 5, 6), arm = str_sub(x, 1, 3))
 }
 
-output = map_df(.x = file_list, ~ read_add_id_arm(.x))
+  map_df(.x = file_list, ~ read_add_id_arm(.x)) %>% 
+  gather(key = week, value = value, week_1:week_8) %>% 
+  separate(week, into = c('remove', 'week'), sep = '_') %>% 
+  select(id, arm, everything(), -remove) %>% 
+  mutate(arm = as.factor(arm)) %>% 
+  #Spaghetti plot
+  ggplot(aes(x = as.numeric(week), y = value, color = arm,
+  group = interaction(arm, id))) + 
+  geom_line() + xlab('Week') +
+  scale_color_discrete(name = "Study Arm",
+                       breaks = c("con", "exp"),
+                      labels = c("Control", "Experimental"))
+
 ```
 
-  The minute-by-minute activity counts data is collected from the individual for `r max(dat$week)` weeks (`r nrow(dat)` days). The original dataset is in a wide format and doesn't contain any missing values. The activity count value ranges from `r min(dat[,-(1:2)])` to `r max(dat[,-(1:2)])`and the distribution is higly righ-skewed (figure 1).
+**Answer**: Whatever value it is they are measuring, those in experimental arm are increasing over time 
   
 ``` {r long_format_minute_by_minute}
 dat_long <-
