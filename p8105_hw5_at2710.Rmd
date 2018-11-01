@@ -1,0 +1,94 @@
+---
+title: "Homework 5"
+author: "Anusorn Thanataveerat"
+date: "November 1, 2018"
+output: github_document
+toc: true
+toc_float: true
+code_folding: hide
+---
+
+```{r setup, include=FALSE}
+library(tidyverse
+library(janitor)
+library(knitr)
+library(ggridges)
+library(patchwork)
+library(lubridate)
+
+knitr::opts_chunk$set(echo = TRUE,
+  fig.width = 6,
+  fig.asp = .6,
+  out.width = "90%"
+)
+
+knitr::knit_hooks$set(inline = function(x) {
+prettyNum(x, big.mark=",")
+})
+```
+
+```{r Load_data}
+
+file_list = list.files(path = 'data/', pattern = "*.csv")
+
+read_add_id_arm <- function(x){
+  read_csv(paste('data/', x, sep = '')) %>% 
+    mutate(id = str_sub(x, 5, 6), arm = str_sub(x, 1, 3))
+}
+
+output = map_df(.x = file_list, ~ read_add_id_arm(.x))
+```
+
+  The minute-by-minute activity counts data is collected from the individual for `r max(dat$week)` weeks (`r nrow(dat)` days). The original dataset is in a wide format and doesn't contain any missing values. The activity count value ranges from `r min(dat[,-(1:2)])` to `r max(dat[,-(1:2)])`and the distribution is higly righ-skewed (figure 1).
+  
+``` {r long_format_minute_by_minute}
+dat_long <-
+  dat %>% gather(key = minute, value = count, activity.1:activity.1440) %>%
+mutate(minute = as.numeric(str_extract(minute, "([0-9]+).*$")))
+```
+
+``` {r daily_dat}
+daily_dat <- dat_long %>% group_by(week, day) %>% mutate(daily_count = sum(count)) %>% select(-c(minute, count)) %>% distinct() %>% ungroup() %>% rename(dow = day) %>% mutate(dow = fct_relevel(dow, c("Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"))) %>% arrange(week, dow) %>% mutate(day = c(1:n()))
+```
+
+```{r Figure_1}
+dat_long %>% ggplot(aes(x = count)) + geom_histogram(color = "#0000FF", fill = "white") + labs(title = "Figure 1: Activity count distribution", x = "Activity count", y = "Frequency") + theme_classic()
+
+```
+
+We then converted them into a long format with `r nrow(dat_long)` rows and summed up the acitivty count within the same day thus ended up with the daily data. 
+
+```{r Figure_2}
+daily_dat %>%  ggplot(aes(x = day, y = daily_count)) + geom_smooth() + 
+    geom_point() + theme(axis.text.x = element_text(angle = 90, hjust = 1)) + 
+  labs(title = "Figure 2: Daily activity count", x = "Day", y = '') + theme_classic()
+```
+
+Figure 2 shows the scatterplot of daily activity count and 2 points were observed. First, the minimum daily count (`r min(daily_dat$daily_count)`) was recorded  `r daily_dat %>% filter(daily_count == min(daily_dat$daily_count)) %>% nrow()`times and it was often recorded in consecutive days. We suspected these readings are the results of nonwear. Second, there was a trend that this persson became more and more active each passing day. We decided to test that hypothesis using the linear model- for an ease of interpretation and also because the daily count variable is somewhat normally distributed- adjusting for days-of-the-week effects. The result indicates that the patient's activity count on average increased by `r round(lm(daily_count ~ dow + day, data = daily_dat)$coefficients[8], 0)` units every day since his discharge with significance level of 0.01. None of the day-of-the-week effects was statistically significant.  
+
+```{r hourly_dat}
+    #Aggregate hourly data
+hourly_dat <- dat_long %>% mutate(hour = cut(minute, breaks = seq(0, 1440, by = 60), labels = c(0:23))) %>%
+  group_by(hour) %>% mutate(hourly_count = sum(count)) %>% select(hour, hourly_count) %>% distinct()
+  
+  #Aggregate hourly data by dow
+hourly_dow_dat <- dat_long %>% mutate(hour = cut(minute, breaks = seq(0, 1440, by = 60), labels = c(0:23))) %>% 
+  group_by(hour, day) %>% mutate(hourly_count = sum(count)) %>% rename(dow = day) %>% ungroup() %>% 
+  mutate(dow = fct_relevel(dow, c("Sunday", "Monday", "Tuesday",
+ "Wednesday", "Thursday", "Friday", "Saturday")), hour = as.numeric(hour)) %>% 
+  select(dow, hourly_count, hour) %>% distinct()
+```
+
+Next we looked at an activity trend by the hour data by agregating activity counts withing the same hour and averaging it across the same day of the week. We ended up hourly dataset with `r nrow(hourly_dow_dat)` rows. Figure 3 presents an hourly distribution of the activity categorized by days of the week. The subject was least active during the night time (midnight to 5 AM). He became more and more active as the day rises until it hit the plateau phase around 10 AM and stayed flat until aroun 9 PM.
+
+```{r Figure_3}
+hourly_dat %>% ggplot(aes(x = as.numeric(hour), y = hourly_count)) + 
+ geom_line(color = 'midnightblue', size = 1) + labs(title = "Figure 3: Hourly activity plot", x = "Hour of day", y = "Frequency") + theme_classic() + scale_x_continuous(breaks = c(0:24))
+```
+
+Once we started considering a days-of-the-week component (Figure 4), there are interesting patterns worth mentioning here. On Sundays, the subject had the peaks of activity around noon time and again at 5PM, which are higher than other days of the week, and then he became less active compared to other days afterwards. Another is the peak of activity that occured on Thursdays' and Fridays' night during 7-10 PM, possibly a night out with friends and family or late gym session?
+```{r}
+hourly_dow_dat %>% ggplot(aes(x = hour, y = hourly_count)) + geom_line(aes(color = dow), size = 1) + labs(title = "Figure 4", x = "Hour of day", y = "Frequency") + theme_classic() + scale_colour_brewer(palette = "Set1") + scale_x_continuous(breaks = c(0:24)) + theme(legend.title = element_blank(),legend.position = c(0.13, 0.6))
+```
+
+
