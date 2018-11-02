@@ -68,5 +68,18 @@ Describe the raw data.
 The raw data contains `r nrow(homicide_dat)` homicide cases from `r sort(homicide_dat$reported_date)[1]` to the end of 2017 (`r sort(homicide_dat$reported_date, decreasing = TRUE)[1]`). It is collected from `r length(table(homicide_dat$city_state))` cities in `r length(table(homicide_dat$state))` states. According to this data, `r homicide_dat %>% count(city_state) %>% arrange(desc(n)) %>% top_n(1) %>% select(city_state)` has the highest homicide cases (`r homicide_dat %>% count(city_state) %>% arrange(desc(n)) %>% top_n(1) %>% select(n)`). `r round(sort(prop.table(table(homicide_dat$victim_race)), decreasing = T)[1]*100,1)`% of the victims are `r names(sort(prop.table(table(homicide_dat$victim_race)), decreasing = T)[1])` and `r round(prop.table(table(homicide_dat$victim_sex))[2]*100,1)`% are male.
  then summarize within cities to obtain the total number of homicides and the number of unsolved homicides (those for which the disposition is “Closed without arrest” or “Open/No arrest”).
 
-
+``` {r}
+  homicide_dat %>% 
+    mutate(case_open = ifelse(disposition != 'Closed by arrest', 1, 0)) %>% 
+    add_count(city_state) %>% 
+    group_by(city_state) %>% 
+    mutate(unsolved_case = sum(case_open)) %>% 
+    filter(case_open == 1 | 
+          n == 1) %>% #to account for location with no open case  
+    select(city_state, unsolved_case, total = n, ) %>% 
+    distinct() %>% 
+    mutate(percent_unsolved = unsolved_case/total) %>% 
+    View()
+  
+```
 
