@@ -25,10 +25,9 @@ knitr::opts_chunk$set(echo = TRUE,
 ## Problem 1
 
 ```{r Problem_1, message = FALSE}
+file_list <- list.files(path = 'data/', pattern = "*.csv")
 
-file_list = list.files(path = 'data/', pattern = "*.csv")
-
-#function to lead each dataset and create id and group variable
+#function to read each dataset and create id and group variable
 read_add_id_arm <- function(x){
   read_csv(paste('data/', x, sep = '')) %>% 
     mutate(id = str_sub(x, 5, 6), arm = str_sub(x, 1, 3))
@@ -42,14 +41,16 @@ read_add_id_arm <- function(x){
   #Spaghetti plot
   ggplot(aes(x = as.numeric(week), y = value, color = arm,
   group = interaction(arm, id))) + 
-  geom_line() + xlab('Week') +
+  geom_line() + xlab('Week') + 
+  geom_smooth(aes(group = arm),
+  method = "lm", se = FALSE) +
   scale_color_discrete(name = "Study Arm",
                        breaks = c("con", "exp"),
                       labels = c("Control", "Experimental"))
 
 ```
 
-**Answer**: Whatever value it is they are measuring, those in experimental arm increase over time while people in the control arm didn't see any increase within the 8-week duration under study. Actually some saw a decrease in the outcome
+**Answer**: Whatever value it is they are measuring, those in experimental arm increase over time while people in the control arm didn't see any increase within the 8-week duration under study. In fact, if you look at the trend line, the average value of the outcome decrease at the end of week 8.
   
 ## Problem 2  
   
@@ -72,7 +73,7 @@ homicide_df <-  homicide_dat %>%
     select(-`1`)
 ```
 
-The raw data contains `r nrow(homicide_dat)` homicide cases from `r sort(homicide_dat$reported_date)[1]` to the end of 2017 (`r sort(homicide_dat$reported_date, decreasing = TRUE)[1]`). It is collected from `r length(table(homicide_dat$city_state))` cities in `r length(table(homicide_dat$state))` states. According to this data, `r homicide_dat %>% count(city_state) %>% arrange(desc(n)) %>% top_n(1) %>% select(city_state)` has the highest homicide cases (`r homicide_dat %>% count(city_state) %>% arrange(desc(n)) %>% top_n(1) %>% select(n)`). `r round(sort(prop.table(table(homicide_dat$victim_race)), decreasing = T)[1]*100,1)`% of the victims are `r names(sort(prop.table(table(homicide_dat$victim_race)), decreasing = T)[1])` and `r round(prop.table(table(homicide_dat$victim_sex))[2]*100,1)`% are male. Here is the table showing the total number of homicides and number of unsolved homidicdes by city.
+The raw data contains `r nrow(homicide_dat)` homicide cases from `r sort(homicide_dat$reported_date)[1]` to the end of 2017 (`r sort(homicide_dat$reported_date, decreasing = TRUE)[1]`). It is collected from `r length(table(homicide_dat$city_state))` cities and according to this data, `r homicide_dat %>% count(city_state) %>% arrange(desc(n)) %>% top_n(1) %>% select(city_state)` has the highest homicide cases (`r homicide_dat %>% count(city_state) %>% arrange(desc(n)) %>% top_n(1) %>% select(n)`). `r round(sort(prop.table(table(homicide_dat$victim_race)), decreasing = T)[1]*100,1)`% of the victims are `r names(sort(prop.table(table(homicide_dat$victim_race)), decreasing = T)[1])` and `r round(prop.table(table(homicide_dat$victim_sex))[2]*100,1)`% are male. Here is the table showing the total number of homicides and number of unsolved homidicdes by city.
 
 ```{r}
     homicide_df %>% kable()
@@ -87,7 +88,9 @@ baltimore <- homicide_df %>%
 #Assign function to tidy data after performing the test,
 #And only retain the estimate and CIs
 prop.test.tidy <- function(x, y){
-  prop.test(x, y) %>% tidy() %>% select(estimate, conf.low, conf.high)
+  prop.test(x, y) %>% 
+  tidy() %>% 
+  select(estimate, conf.low, conf.high)
 }
 result_baltimore <- prop.test.tidy(baltimore$unsolved_case, baltimore$total)
 ```
@@ -95,11 +98,14 @@ result_baltimore <- prop.test.tidy(baltimore$unsolved_case, baltimore$total)
 Focusing on Baltimore, MD, the proportion of homicides that are unsolved is `r round(result_baltimore$estimate, 2)` (`r round(result_baltimore$conf.low, 2)`, `r round(result_baltimore$conf.high, 2)`).
 
 ```{r}
-finaldat <- map2(homicide_df$unsolved_case, homicide_df$total, prop.test.tidy) %>% bind_rows() %>% bind_cols(., homicide_df) %>% select(city_state, everything()) 
+finaldat <- 
+  map2(homicide_df$unsolved_case, homicide_df$total, prop.test.tidy) %>%         bind_rows() %>% 
+  bind_cols(., homicide_df) %>% 
+  select(city_state, everything()) 
 
 ```
 
-Create a plot that shows the estimates and CIs for each city – check out geom_errorbar for a way to add error bars based on the upper and lower limits. Organize cities according to the proportion of unsolved homicides.
+A plot that shows the estimates and CIs for each city
 
 ```{r figure}
 finaldat %>% 
